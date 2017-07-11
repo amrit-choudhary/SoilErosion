@@ -6,17 +6,21 @@ public class GameManager : MonoBehaviour
 {
     public string heightmapFileName;
     public int heightmapSize;
+    public int terrainSizeInMeters;
     public int subDivision;
-    private int tileSize;
+    private int tileSizeInPixels;
+    private float tileSizeInMeters;
     public List<Tile> tiles;
     private float[,] heightData;
-    public int testX, testY;
+    private bool initDone = false;
+    public int overlayHeightInMeters;
 
     // Use this for initialization
     void Start() {
         LoadHeightmapData();
 
-        tileSize = (heightmapSize - 1) / subDivision;
+        tileSizeInPixels = (heightmapSize - 1) / subDivision;
+        tileSizeInMeters = (float)terrainSizeInMeters / subDivision;
         Tile newTile;
         /// <summary>
         /// For an axis aligned square with top left at origin
@@ -35,10 +39,10 @@ public class GameManager : MonoBehaviour
         for(int x = 0; x < subDivision; x++) {
             for(int y = 0; y < subDivision; y++) {
 
-                height0 = heightData[(x + 0) * tileSize, (y + 0) * tileSize];
-                height1 = heightData[(x + 0) * tileSize, (y + 1) * tileSize];
-                height2 = heightData[(x + 1) * tileSize, (y + 1) * tileSize];
-                height3 = heightData[(x + 1) * tileSize, (y + 0) * tileSize];
+                height0 = heightData[(x + 0) * tileSizeInPixels, (y + 0) * tileSizeInPixels];
+                height1 = heightData[(x + 0) * tileSizeInPixels, (y + 1) * tileSizeInPixels];
+                height2 = heightData[(x + 1) * tileSizeInPixels, (y + 1) * tileSizeInPixels];
+                height3 = heightData[(x + 1) * tileSizeInPixels, (y + 0) * tileSizeInPixels];
 
                 if(x == 0 || y == 0 || x == subDivision - 1 || y == subDivision - 1)
                     newTile = new Tile(x, y, true, height0, height1, height2, height3);
@@ -49,12 +53,13 @@ public class GameManager : MonoBehaviour
                 tiles.Add(newTile);
             }
         }
+        initDone = true;
     }
 
     // Update is called once per frame
     void Update() {
         if(Input.GetKeyDown(KeyCode.X)) {
-            Debug.Log(heightData[testX, testY]);
+            
         }
     }
 
@@ -80,5 +85,18 @@ public class GameManager : MonoBehaviour
         }
 
     }
+
+    private void OnDrawGizmos() {
+        
+        if(initDone) {
+            for(int i = 0; i < tiles.Count; i++) {
+                Gizmos.color = new Color(0, 0, tiles[i].averageHeight, 1.0f);
+                Gizmos.DrawCube(new Vector3(tiles[i].y * tileSizeInMeters + tileSizeInMeters / 2.0f, overlayHeightInMeters * 1.5f, (subDivision - tiles[i].x - 1) * tileSizeInMeters + tileSizeInMeters / 2.0f), 
+                    new Vector3(tileSizeInMeters, 100, tileSizeInMeters));
+                // z value changed because of 90 degree offset due to coordinate system change of raw data file and xyz coordinate system
+            }
+        }
+    }
+
 
 }

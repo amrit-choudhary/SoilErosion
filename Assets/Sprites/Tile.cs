@@ -19,6 +19,7 @@ public class Tile {
     private TileFlowDirection direction = TileFlowDirection.None;
     private float waterIn = 0;
     public bool isEdge = false;
+    public float averageHeight;
 
     public Tile(int _x, int _y, bool _isEdge, float h0, float h1, float h2, float h3) {
         x = _x;
@@ -28,6 +29,7 @@ public class Tile {
         height1 = h1;
         height2 = h2;
         height3 = h3;
+        averageHeight = (h0 + h1 + h2 + h3) / 4.0f;
     }
 
 
