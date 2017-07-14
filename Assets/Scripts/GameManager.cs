@@ -15,7 +15,7 @@ public class GameManager : MonoBehaviour
     private float[,] heightData;
     private bool initDone = false;
     public int overlayHeightInMeters;
-    private float initialWater = 100;
+    public float initialWater = 100;
     private int simSteps = 0;
     public int maxSimSteps = 10;
     private Tile currentSimTile = null;
@@ -194,7 +194,7 @@ public class GameManager : MonoBehaviour
     }
 
     private void FindMaxWater() {
-        float maxWater = tiles.Max(t => t.waterIn);
+        maxWater = tiles.Max(t => t.waterIn);
     }
 
     private void OnDrawGizmos() {
