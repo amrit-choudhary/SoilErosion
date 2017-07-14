@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public class GameManager : MonoBehaviour
 {
@@ -14,6 +15,15 @@ public class GameManager : MonoBehaviour
     private float[,] heightData;
     private bool initDone = false;
     public int overlayHeightInMeters;
+    private float initialWater = 100;
+    private int simSteps = 0;
+    public int maxSimSteps = 10;
+    private Tile currentSimTile = null;
+    private float maxWater = 1000;
+    public Mesh planeMesh;
+    public bool drawFlowDirection = true;
+    [Range(0, 1.0f)]
+    public float cutoff = 0.5f;
 
     // Use this for initialization
     void Start() {
@@ -76,6 +86,10 @@ public class GameManager : MonoBehaviour
         }
         #endregion
         initDone = true;
+
+        StartSim();
+
+        FindMaxWater();
     }
 
     private void AddNeighbour(int deltaX, int deltaY, Tile currentTile, List<Tile> neighbourTiles) {
@@ -120,28 +134,6 @@ public class GameManager : MonoBehaviour
 
     }
 
-    private void OnDrawGizmos() {
-
-        if(initDone) {
-            for(int i = 0; i < tiles.Count; i++) {
-                Gizmos.color = new Color(0, 0, tiles[i].height0, 0.0f);
-                Vector3 origin = new Vector3(tiles[i].y * tileSizeInMeters + tileSizeInMeters / 2.0f, overlayHeightInMeters * 1.5f, (subDivision - tiles[i].x - 1) * tileSizeInMeters + tileSizeInMeters / 2.0f);
-                Gizmos.DrawCube(origin, new Vector3(tileSizeInMeters, 100, tileSizeInMeters));
-                // z value changed because of 90 degree offset due to coordinate system change of raw data file and xyz coordinate system
-
-                Gizmos.color = new Color(1.0f, 0, 0, 1.0f);
-                if(tiles[i].flowDirection != TileFlowDirection.None) {
-                    int flowAngle = DirectionToAngle(tiles[i].flowDirection);
-                    Vector3 directionVector = new Vector3(0, 0, tileSizeInMeters * 0.4f);
-                    directionVector = Quaternion.Euler(0, flowAngle, 0) * directionVector;
-                    Vector3 target = origin + directionVector;
-                    Gizmos.DrawWireCube(origin, Vector3.one * tileSizeInMeters * 0.15f);
-                    Gizmos.DrawLine(origin, target);
-                }
-            }
-        }
-    }
-
     private int DirectionToAngle(TileFlowDirection flowDirection) {
         if(flowDirection == TileFlowDirection.TopLeft)
             return -45;
@@ -169,4 +161,69 @@ public class GameManager : MonoBehaviour
 
         return 0;
     }
+
+    private void StartSim() {
+        for(int i =0; i < tiles.Count; i++) {
+            simSteps = 0;
+            currentSimTile = tiles[i];
+
+            currentSimTile.WaterIn(initialWater);
+
+            while (SimStep(currentSimTile)) {
+                currentSimTile = currentSimTile.flowTile;
+            }
+        }
+    }
+
+    private bool SimStep(Tile tile) {
+        simSteps++;
+
+        if (simSteps > maxSimSteps)
+            return false;
+
+        if (tile.isCliff) {
+            return false;
+        } else {
+            tile.WaterIn(initialWater);
+            return true;
+        }
+    }
+
+    private void StopSim() {
+
+    }
+
+    private void FindMaxWater() {
+        float maxWater = tiles.Max(t => t.waterIn);
+    }
+
+    private void OnDrawGizmos() {
+
+        if (initDone) {
+            for (int i = 0; i < tiles.Count; i++) {
+                float mainColor = tiles[i].waterIn / maxWater;
+                if (mainColor <= cutoff)
+                    mainColor = 0;
+
+                Gizmos.color = new Color(0, 0, mainColor, 1.0f);
+                //Gizmos.color = new Color(0, 0, tiles[i].averageHeight, 1.0f);
+                Vector3 origin = new Vector3(tiles[i].y * tileSizeInMeters + tileSizeInMeters / 2.0f, overlayHeightInMeters * 1.5f, (subDivision - tiles[i].x - 1) * tileSizeInMeters + tileSizeInMeters / 2.0f);
+                Gizmos.DrawMesh(planeMesh, origin - new Vector3(0, 0, 0), Quaternion.Euler(-90, 0, 0), new Vector3(tileSizeInMeters / 2.0f, tileSizeInMeters/ 2.0f, 1));
+                // z value changed because of 90 degree offset due to coordinate system change of raw data file and xyz coordinate system
+
+                if (drawFlowDirection) {
+                    Gizmos.color = new Color(1.0f, 0, 0, 1.0f);
+                    if (tiles[i].flowDirection != TileFlowDirection.None) {
+                        int flowAngle = DirectionToAngle(tiles[i].flowDirection);
+                        Vector3 directionVector = new Vector3(0, 0, tileSizeInMeters * 0.4f);
+                        directionVector = Quaternion.Euler(0, flowAngle, 0) * directionVector;
+                        Vector3 target = origin + directionVector;
+                        Gizmos.DrawWireCube(origin, Vector3.one * tileSizeInMeters * 0.15f);
+                        Gizmos.DrawLine(origin, target);
+                    }
+                }
+            }
+        }
+    }
+
 }

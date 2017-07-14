@@ -19,7 +19,7 @@ public class Tile
     /// </summary>
     public float height0 = 0, height1 = 0, height2 = 0, height3 = 0, height4 = 0;
     public TileFlowDirection flowDirection = TileFlowDirection.None;
-    private float waterIn = 0;
+    public float waterIn = 0;
     public bool isCliff = false;
     public float averageHeight;
     public List<Tile> neighbourTiles;
@@ -72,7 +72,10 @@ public class Tile
         } else {
             flowDirection = (TileFlowDirection)flowIndex;
         }
-        Debug.Log(flowDirection);
+    }
+
+    public void WaterIn(float amount) {
+        waterIn += amount;
     }
 
     public override string ToString() {
