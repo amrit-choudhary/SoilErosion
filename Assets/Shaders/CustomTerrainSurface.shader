@@ -1,11 +1,13 @@
 ﻿Shader "Custom/CustomTerrainSurface" {
 	Properties{
 		_Color("Color", Color) = (1,1,1,1)
-		_MainTex("Albedo (RGB)", 2D) = "white" {}
+		[HideInInspector]_MainTex("Albedo (RGB)", 2D) = "white" {}
+		_SecondTex("SecondTex", 2D) = "white" {}
 		_TerrainGradientTex("Terrain Gradient", 2D) = "white" {}
 		_Glossiness("Smoothness", Range(0,1)) = 0.5
 		_Metallic("Metallic", Range(0,1)) = 0.0
 		_MaxHeight("MaxHeight", Float) = 0
+		_TerrainOverlay("TerrainOverlay", 2D) = "white" {}
 	}
 		SubShader{
 			Tags { "RenderType" = "Opaque" }
@@ -23,7 +25,9 @@
 			};
 
 			sampler2D _MainTex;
+			sampler2D _SecondTex;
 			sampler2D _TerrainGradientTex;
+			sampler2D _TerrainOverlay;
 			half _Glossiness;
 			half _Metallic;
 			fixed4 _Color;
@@ -31,8 +35,9 @@
 
 			void surf(Input IN, inout SurfaceOutputStandard o) {
 				// Albedo comes from a texture tinted by color
-				fixed4 c = tex2D(_MainTex, IN.uv_MainTex) * _Color;
-				c = tex2D(_TerrainGradientTex, float2(IN.worldPos.y / _MaxHeight, 0.5));
+				//fixed4 c = tex2D(_MainTex, IN.uv_MainTex) * _Color;
+				fixed3 c = tex2D(_TerrainOverlay, IN.uv_MainTex);
+				//c = tex2D(_TerrainGradientTex, float2(IN.worldPos.y / _MaxHeight, 0.5));
 				o.Albedo = c.rgb;
 				// Metallic and smoothness come from slider variables
 				o.Metallic = _Metallic;

@@ -24,6 +24,10 @@ public class GameManager : MonoBehaviour
     public bool drawFlowDirection = true;
     [Range(0, 1.0f)]
     public float cutoff = 0.5f;
+    public Material terrainMaterial;
+    public Texture2D terrainTexture;
+    private Texture2D terrainHeightTexture;
+    private Texture2D terrainFlowDirectionTexture;
 
     // Use this for initialization
     void Start() {
@@ -85,6 +89,9 @@ public class GameManager : MonoBehaviour
             tiles[i].SetNeighbours(neighbours);
         }
         #endregion
+
+        InitTextures();
+
         initDone = true;
 
         StartSim();
@@ -197,6 +204,56 @@ public class GameManager : MonoBehaviour
         maxWater = tiles.Max(t => t.waterIn);
     }
 
+    private void InitTextures() {
+        terrainHeightTexture = new Texture2D(subDivision, subDivision);
+        terrainHeightTexture.filterMode = FilterMode.Point;
+        for (int x = 0; x < subDivision; x++) {
+            for (int y = 0; y < subDivision; y++) {
+                terrainHeightTexture.SetPixel(y, x, new Color(0, 0, tiles[x * subDivision + y].averageHeight, 1));    // x and y flipped to match the overlay texture with 3d terrain
+                                                                                                                // now just use same heightmaps in terrain and as height data
+            }
+        }
+        terrainHeightTexture.Apply();
+
+        terrainFlowDirectionTexture = new Texture2D(subDivision, subDivision);
+        terrainFlowDirectionTexture.filterMode = FilterMode.Point;
+                for (int x = 0; x < subDivision; x++) {
+            for (int y = 0; y < subDivision; y++) {
+                terrainFlowDirectionTexture.SetPixel(y, x, FlowDirectionToColor(tiles[x * subDivision + y].flowDirection));    // x and y flipped to match the overlay texture with 3d terrain
+                                                                                                                // now just use same heightmaps in terrain and as height data
+            }
+        }
+        terrainFlowDirectionTexture.Apply();
+
+        terrainMaterial.SetTexture("_TerrainOverlay", terrainFlowDirectionTexture);
+    }
+
+    private Color FlowDirectionToColor(TileFlowDirection flowDirection) {
+        // using https://www.sessions.edu/color-calculator/
+        switch (flowDirection) {
+            case TileFlowDirection.None:
+                return Color.black;
+            case TileFlowDirection.Top:
+                return new Color(0.466f, 1.0f, 0);
+            case TileFlowDirection.Left:
+                return new Color(1.0f, 0, 0);
+            case TileFlowDirection.Right:
+                return new Color(0, 1.0f, 1.0f);
+            case TileFlowDirection.Bottom:
+                return new Color(0.50f, 0, 1.0f);
+            case TileFlowDirection.TopLeft:
+                return new Color(1.0f, 0.713f, 0.0f);
+            case TileFlowDirection.BottomRight:
+                return new Color(0, 0.34f, 1.0f);
+            case TileFlowDirection.TopRight:
+                return new Color(0, 1.0f, 0.22f);
+            case TileFlowDirection.BottomLeft:
+                return new Color(1.0f, 0, 0.8f);
+        }
+        return new Color(1, 1, 1, 1);
+    }
+
+    /*
     private void OnDrawGizmos() {
 
         if (initDone) {
@@ -225,5 +282,6 @@ public class GameManager : MonoBehaviour
             }
         }
     }
+    */
 
 }
