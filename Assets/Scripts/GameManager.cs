@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using System.Linq;
 
 public class GameManager : MonoBehaviour
@@ -18,8 +19,9 @@ public class GameManager : MonoBehaviour
     public float initialWater = 100;
     private int simSteps = 0;
     public int maxSimSteps = 10;
+    public int lookStep = 0;
+    public float stepFlowFactor;
     private Tile currentSimTile = null;
-    private float maxWater = 1000;
     public Mesh planeMesh;
     public bool drawFlowDirection = true;
     [Range(0, 1.0f)]
@@ -28,9 +30,14 @@ public class GameManager : MonoBehaviour
     public Texture2D terrainTexture;
     private Texture2D terrainHeightTexture;
     private Texture2D terrainFlowDirectionTexture;
+    private Texture2D terrainCurrentWaterTexture;
+    public int completedStepIndex = 0;
+    private Color[] currentWaters;
+    public Text infoText;
+    private DisplayMode currentDisplayMode = DisplayMode.None;
 
     // Use this for initialization
-    void Start() {
+    private void Start() {
         LoadHeightmapData();
 
         #region SetHeight
@@ -61,7 +68,7 @@ public class GameManager : MonoBehaviour
                 height3 = heightData[(x + 1) * tileSizeInPixels, (y + 1) * tileSizeInPixels];
                 height4 = heightData[(x + 1) * tileSizeInPixels, (y + 0) * tileSizeInPixels];
 
-                newTile = new Tile(x, y, height0, height1, height2, height3, height4);
+                newTile = new Tile(x, y, height0, height1, height2, height3, height4, stepFlowFactor);
                 tiles.Add(newTile);
             }
         }
@@ -90,13 +97,11 @@ public class GameManager : MonoBehaviour
         }
         #endregion
 
-        InitTextures();
-
         initDone = true;
 
         StartSim();
 
-        FindMaxWater();
+        InitTextures();
     }
 
     private void AddNeighbour(int deltaX, int deltaY, Tile currentTile, List<Tile> neighbourTiles) {
@@ -112,10 +117,46 @@ public class GameManager : MonoBehaviour
     }
 
     // Update is called once per frame
-    void Update() {
-        if(Input.GetKeyDown(KeyCode.X)) {
-
+    private void Update() {
+        if(Input.GetKeyDown(KeyCode.Z)) {
+            SimStepNext();
         }
+        if(Input.GetKeyDown(KeyCode.X)) {
+            SimStepLast();
+        }
+
+        if(Input.GetMouseButtonDown(0)) {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit;
+            if(Physics.Raycast(ray, out hit, 10000)) {
+                Vector3 temp = new Vector3(hit.point.x / terrainSizeInMeters, hit.point.y / 50, hit.point.z / terrainSizeInMeters);
+                temp = new Vector3((int)Mathf.Clamp(temp.x * subDivision, 0, subDivision), temp.y, (int)Mathf.Clamp(temp.z * subDivision, 0, subDivision));
+                Tile tile = tiles.Find((X) => X.x == temp.z && X.y == temp.x);
+
+                if(currentDisplayMode == DisplayMode.Height)
+                    infoText.text = "Normalized Height : " + tile.averageHeight.ToString("0.00");
+
+                if(currentDisplayMode == DisplayMode.Slope)
+                    infoText.text = "Flow Direction : " + tile.flowDirection;
+
+                if(currentDisplayMode == DisplayMode.CurrentWater)
+                    infoText.text = "Runoff : " + tile.currentWaters[lookStep].ToString("0.00");
+            }
+        }
+
+        if(Input.GetKeyDown(KeyCode.Alpha1)) {
+            currentDisplayMode = DisplayMode.Height;
+            ChangeDisplayMode(DisplayMode.Height);
+        }
+        if(Input.GetKeyDown(KeyCode.Alpha2)) {
+            currentDisplayMode = DisplayMode.Slope;
+            ChangeDisplayMode(DisplayMode.Slope);
+        }
+        if(Input.GetKeyDown(KeyCode.Alpha3)) {
+            currentDisplayMode = DisplayMode.CurrentWater;
+            ChangeDisplayMode(DisplayMode.CurrentWater);
+        }
+
     }
 
     private void LoadHeightmapData() {
@@ -123,7 +164,13 @@ public class GameManager : MonoBehaviour
         int w = heightmapSize;
         heightData = new float[h, w];
 
+#if UNITY_EDITOR
         using(var file = System.IO.File.OpenRead("Assets/Heightmaps/" + heightmapFileName + ".raw"))
+#endif
+#if !UNITY_EDITOR
+        using(var file = System.IO.File.OpenRead("Heightmaps/" + heightmapFileName + ".raw"))
+#endif
+
         using(var reader = new System.IO.BinaryReader(file)) {
             for(int x = 0; x < w; x++) {
                 for(int y = 0; y < h; y++) {
@@ -170,67 +217,95 @@ public class GameManager : MonoBehaviour
     }
 
     private void StartSim() {
-        for(int i =0; i < tiles.Count; i++) {
-            simSteps = 0;
-            currentSimTile = tiles[i];
-
-            currentSimTile.WaterIn(initialWater);
-
-            while (SimStep(currentSimTile)) {
-                currentSimTile = currentSimTile.flowTile;
-            }
+        for(int i = 0; i < tiles.Count; i++) {
+            tiles[i].SimStart(initialWater);
         }
+        completedStepIndex = 0;
     }
 
-    private bool SimStep(Tile tile) {
-        simSteps++;
-
-        if (simSteps > maxSimSteps)
-            return false;
-
-        if (tile.isCliff) {
-            return false;
-        } else {
-            tile.WaterIn(initialWater);
-            return true;
+    private void SimStep() {
+        for(int j = 0; j < tiles.Count; j++) {
+            tiles[j].MoveWater();
         }
+
+        for(int j = 0; j < tiles.Count; j++) {
+            tiles[j].RecordWater();
+        }
+
+        completedStepIndex++;
     }
 
-    private void StopSim() {
-
-    }
-
-    private void FindMaxWater() {
-        maxWater = tiles.Max(t => t.waterIn);
+    private float FindMaxWater(int stepIndex) {
+        return tiles.Max(t => t.currentWaters[stepIndex]);
     }
 
     private void InitTextures() {
         terrainHeightTexture = new Texture2D(subDivision, subDivision);
         terrainHeightTexture.filterMode = FilterMode.Point;
-        for (int x = 0; x < subDivision; x++) {
-            for (int y = 0; y < subDivision; y++) {
-                terrainHeightTexture.SetPixel(y, x, new Color(0, 0, tiles[x * subDivision + y].averageHeight, 1));    // x and y flipped to match the overlay texture with 3d terrain
-                                                                                                                // now just use same heightmaps in terrain and as height data
+        for(int x = 0; x < subDivision; x++) {
+            for(int y = 0; y < subDivision; y++) {
+                //terrainHeightTexture.SetPixel(y, x, new Color(0, 0, tiles[x * subDivision + y].averageHeight, 1));    // x and y flipped to match the overlay texture with 3d terrain
+                                                                                                                        // now just use same heightmaps in terrain and as height data
+                terrainHeightTexture.SetPixel(y, x, Color.Lerp(Color.red, Color.blue, tiles[x * subDivision + y].averageHeight));
             }
         }
         terrainHeightTexture.Apply();
 
         terrainFlowDirectionTexture = new Texture2D(subDivision, subDivision);
         terrainFlowDirectionTexture.filterMode = FilterMode.Point;
-                for (int x = 0; x < subDivision; x++) {
-            for (int y = 0; y < subDivision; y++) {
+        for(int x = 0; x < subDivision; x++) {
+            for(int y = 0; y < subDivision; y++) {
                 terrainFlowDirectionTexture.SetPixel(y, x, FlowDirectionToColor(tiles[x * subDivision + y].flowDirection));    // x and y flipped to match the overlay texture with 3d terrain
-                                                                                                                // now just use same heightmaps in terrain and as height data
+                                                                                                                               // now just use same heightmaps in terrain and as height data
             }
         }
         terrainFlowDirectionTexture.Apply();
 
-        terrainMaterial.SetTexture("_TerrainOverlay", terrainFlowDirectionTexture);
+        terrainCurrentWaterTexture = new Texture2D(subDivision, subDivision);
+        currentWaters = new Color[subDivision * subDivision];
+        terrainCurrentWaterTexture.filterMode = FilterMode.Point;
+        UpdateCurrentWaterTexture();
+
+        //ChangeDisplayMode(DisplayMode.CurrentWater);
+    }
+
+    private void ChangeDisplayMode(DisplayMode displayMode) {
+        switch(displayMode) {
+            case DisplayMode.CurrentWater:
+                terrainMaterial.SetTexture("_TerrainOverlay", terrainCurrentWaterTexture);
+                break;
+            case DisplayMode.Height:
+                terrainMaterial.SetTexture("_TerrainOverlay", terrainHeightTexture);
+                break;
+            case DisplayMode.Slope:
+                terrainMaterial.SetTexture("_TerrainOverlay", terrainFlowDirectionTexture);
+                break;
+        }
+    }
+
+    private void UpdateCurrentWaterTexture() {
+        float maxWater = FindMaxWater(lookStep);
+        for(int x = 0; x < subDivision; x++) {
+            for(int y = 0; y < subDivision; y++) {
+                /*currentWaters[x * subDivision + y] = new Color(1 - tiles[x * subDivision + y].currentWaters[lookStep] / maxWater,
+                                                                    1 - tiles[x * subDivision + y].currentWaters[lookStep] / maxWater,
+                                                                    1,
+                                                                    1
+                                                                    );    // x and y flipped to match the overlay texture with 3d terrain
+                                                                           // now just use same heightmaps in terrain and as height data
+                                                                           */
+
+                float temp = 1 - tiles[x * subDivision + y].currentWaters[lookStep] / maxWater;
+                currentWaters[x * subDivision + y] = Color.Lerp(Color.blue, Color.white, temp);
+            }
+        }
+        terrainCurrentWaterTexture.SetPixels(currentWaters);
+        terrainCurrentWaterTexture.Apply();
     }
 
     private Color FlowDirectionToColor(TileFlowDirection flowDirection) {
         // using https://www.sessions.edu/color-calculator/
-        switch (flowDirection) {
+        switch(flowDirection) {
             case TileFlowDirection.None:
                 return Color.black;
             case TileFlowDirection.Top:
@@ -253,6 +328,7 @@ public class GameManager : MonoBehaviour
         return new Color(1, 1, 1, 1);
     }
 
+#region OnDrawGizmos
     /*
     private void OnDrawGizmos() {
 
@@ -283,5 +359,23 @@ public class GameManager : MonoBehaviour
         }
     }
     */
+#endregion
+
+    private void SimStepNext() {
+        lookStep++;
+        lookStep = Mathf.Clamp(lookStep, 0, maxSimSteps - 1);
+
+        if(lookStep > completedStepIndex) {
+            SimStep();
+        }
+
+        UpdateCurrentWaterTexture();
+    }
+
+    private void SimStepLast() {
+        lookStep--;
+        lookStep = Mathf.Clamp(lookStep, 0, maxSimSteps - 1);
+        UpdateCurrentWaterTexture();
+    }
 
 }

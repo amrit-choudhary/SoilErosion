@@ -19,13 +19,15 @@ public class Tile
     /// </summary>
     public float height0 = 0, height1 = 0, height2 = 0, height3 = 0, height4 = 0;
     public TileFlowDirection flowDirection = TileFlowDirection.None;
-    public float waterIn = 0;
     public bool isCliff = false;
     public float averageHeight;
     public List<Tile> neighbourTiles;
     public Tile flowTile;
+    public List<float> currentWaters = new List<float>();
+    private float currentWater;
+    private float flowFactor;
 
-    public Tile(int _x, int _y, float h0, float h1, float h2, float h3, float h4) {
+    public Tile(int _x, int _y, float h0, float h1, float h2, float h3, float h4, float stepFlowFactor) {
         x = _x;
         y = _y;
         height0 = h0;
@@ -34,6 +36,7 @@ public class Tile
         height3 = h3;
         height4 = h4;
         averageHeight = (h0 + h1 + h2 + h3) / 4.0f;
+        flowFactor = stepFlowFactor;
     }
 
     /// <summary>
@@ -68,14 +71,30 @@ public class Tile
 
         int flowIndex = unsortedNeighbourTiles.IndexOf(flowTile);
         if(flowTile.isCliff) {
-            flowDirection = (TileFlowDirection)(- 1);
+            flowDirection = (TileFlowDirection)(-1);
         } else {
             flowDirection = (TileFlowDirection)flowIndex;
         }
     }
 
     public void WaterIn(float amount) {
-        waterIn += amount;
+        currentWater += amount;
+    }
+
+    public void SimStart(float initialWater) {
+        currentWater = initialWater;
+        currentWaters.Add(initialWater);
+    }
+
+    public void MoveWater() {
+        if(!flowTile.isCliff)
+            flowTile.WaterIn(currentWater * flowFactor);
+
+        currentWater = currentWater * (1 - flowFactor);
+    }
+
+    public void RecordWater() {
+        currentWaters.Add(currentWater);
     }
 
     public override string ToString() {
